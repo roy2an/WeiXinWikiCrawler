@@ -26,9 +26,9 @@ sys.setdefaultencoding('utf8')
 class Crawler(object):
     def __init__(self):
         super(Crawler, self).__init__()
-        self.links = []
-        self.ids= []
-        self.names= []
+        self.ids = []
+        self.names = []
+        self.files = []
     
 
     def readRootJSON(self, html):
@@ -86,6 +86,7 @@ class Crawler(object):
                 pass
             os.chdir(dirname)
             length = 0
+            diffs = ""
             for index, model_id in enumerate(self.ids):
                 filename = self.names[index]+'_'+model_id+'.html'
                 test_html = 'https://mp.weixin.qq.com/wiki?action=doc&id={0}&t={1}'
@@ -101,20 +102,25 @@ class Crawler(object):
                 os.chdir('../'+dirname)
                 tolines = open(filename, 'U').read().decode()
                 print ('start diff %s %s' %(self.names[index], model_id))
-                count = len(list(difflib.unified_diff(fromlines, tolines, fromfile='HTML', tofile=dirname)))
+                count = len(list(difflib.unified_diff(fromlines, tolines, fromfile='HTML', tofile=self.names[index])))
                 if count>0:
                     length += 1
                     os.chdir('..')
+                    self.files.append(self.names[index]+'_'+model_id+'.txt')
                     with open(self.names[index]+'_'+model_id+'.txt', 'wb') as img:
-                        for line in difflib.unified_diff(fromlines, tolines, fromfile='HTML', tofile=dirname):
+                        for line in difflib.unified_diff(fromlines, tolines, fromfile='HTML', tofile=self.names[index]):
                             img.write(line+"\n")
+                            diffs += line+"\n"
                     os.chdir('HTML')
                     with open(filename, 'wb') as img:
                         img.write(content.prettify()[42:-10])
                     os.chdir('../'+dirname)
             os.chdir('..')
-            shutil.rmtree(dirname)  
+            shutil.rmtree(dirname)
             print ('totall diff %s docs' %(length))
+            email_content = "微信Wiki爬虫于[{0}]执行了一次抓取行为，总计有{1}篇文章有更新\n"
+            self.sendMail(email_content.format(dirname, length) + diffs)
+            
         else:
             try:
                 os.mkdir('HTML')
@@ -130,6 +136,29 @@ class Crawler(object):
                 for i, content in enumerate(contents):
                     with open(filename, 'wb') as img:
                         img.write(content.prettify()[42:-10])
+
+    def sendMail(self, content):
+        # 第三方 SMTP 服务
+        mail_host=""  #设置服务器
+        mail_user=""    #用户名
+        mail_pass=""   #口令 
+        sender = ''
+        receivers = ['']  # 接收邮件，可设置为你的QQ邮箱或者其他邮箱
+        
+        # 三个参数：第一个为文本内容，第二个 plain 设置文本格式，第三个 utf-8 设置编码
+        message = MIMEText(content, 'plain', 'utf-8')
+        message['From'] = Header(sender, 'utf-8')
+        message['To'] =  Header(",".join(receivers), 'utf-8')
+        message['Subject'] = Header('微信Wiki爬虫报告', 'utf-8')
+        try:
+            smtpObj = smtplib.SMTP()
+            smtpObj.connect(mail_host, 25)    # 25 为 SMTP 端口号
+            smtpObj.login(mail_user,mail_pass)
+            smtpObj.sendmail(sender, receivers, message.as_string())
+            print "邮件发送成功"
+        except smtplib.SMTPException:
+            print "Error: 无法发送邮件"
+
 
 if __name__ == '__main__':
     test_html = 'https://mp.weixin.qq.com/wiki'
